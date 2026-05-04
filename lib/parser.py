@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -120,7 +121,15 @@ def parse_arval_pdf(pdf_bytes: bytes, api_key: Optional[str] = None) -> dict[str
         raw_text = raw_text.split("```")[1]
         if raw_text.startswith("json"):
             raw_text = raw_text[4:]
-    return json.loads(raw_text.strip())
+    parsed = json.loads(raw_text.strip())
+
+    # Normalize offer_number: the model occasionally emits "15789678 / 1"
+    # (matching the visual layout of the PDF cell) instead of "15789678/1".
+    # Treat the canonical form as no-spaces so deduplication works.
+    if isinstance(parsed, dict) and isinstance(parsed.get("offer_number"), str):
+        parsed["offer_number"] = re.sub(r"\s*/\s*", "/", parsed["offer_number"]).strip()
+
+    return parsed
 
 
 def parse_arval_pdf_file(pdf_path: str | Path, api_key: Optional[str] = None) -> dict[str, Any]:
