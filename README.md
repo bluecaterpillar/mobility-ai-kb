@@ -2,6 +2,11 @@
   <img src="assets/hurry_logo.svg" width="120" alt="The Hurry"/>
   <h1>Mobility AI — Knowledge Base PoC</h1>
   <p><em>Quote intelligence platform per <a href="https://www.the-hurry.com/">The Hurry</a></em></p>
+  <p>
+    <strong>Live demo:</strong>
+    <a href="https://mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app/">mobility-ai-kb-…streamlit.app</a>
+    &nbsp;·&nbsp; login: <code>demo.thehurry / demo2026</code>
+  </p>
 </div>
 
 ---
@@ -218,6 +223,6 @@ Il logo `assets/hurry_logo.svg` viene mostrato:
 | C | Pagina Upload (end-to-end con rollback) | ✅ done |
 | D | 20 record seed curati a mano | ✅ done |
 | E | Pagine Cerca + Esplora | ✅ done |
-| F | Polish + `DEPLOY.md` + acceptance review + brand The Hurry | ✅ done |
+| F | Polish + `DEPLOY.md` + acceptance review + brand The Hurry + deploy live | ✅ done |
 
 Walkthrough completo del deploy: [`DEPLOY.md`](DEPLOY.md).

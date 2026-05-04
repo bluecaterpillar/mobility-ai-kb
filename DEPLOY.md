@@ -2,6 +2,8 @@
 
 End-to-end setup: Supabase free project + Streamlit Community Cloud + Anthropic API. Roughly **30 minutes** start to finish, assuming you already have accounts.
 
+> 🟢 **Live reference deploy:** [mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app](https://mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app/) · login `demo.thehurry / demo2026` (set the app to **public** in Streamlit Cloud → Settings → Sharing if you want unauthenticated visitors).
+
 ---
 
 ## TL;DR
@@ -157,13 +159,21 @@ Click **Deploy**. First build takes ~3 min (pip resolves the deps). On success y
 
 > **Heads-up:** Streamlit Community Cloud requires a public GitHub repo on the free tier. Make sure no secret ever lands in a commit. The `.gitignore` covers `.streamlit/secrets.toml` — verify with `git status` before each push.
 
+### 4.5 — Make the app publicly viewable (optional)
+
+By default a new Streamlit Cloud app is **private** — visitors are bounced to `/-/login` (Streamlit's own auth wall) before they ever see your mock login. To let anyone reach the demo:
+
+> **Settings → Sharing** → toggle **"Anyone with the URL can view this app"** → Save.
+
+The `demo.thehurry / demo2026` mock credentials remain the actual gate inside the app, so this just removes the upstream Streamlit-Cloud login layer.
+
 ---
 
 ## Step 5 · Post-deploy verification (acceptance criteria, spec §11)
 
 Run through this on the deployed URL.
 
-- [ ] Streamlit app reachable at the `*.streamlit.app` URL.
+- [x] Streamlit app reachable at the `*.streamlit.app` URL — reference deploy: [mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app](https://mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app/).
 - [ ] Login with `demo.thehurry / demo2026` works; reload preserves the session; **Esci** (sidebar) returns to the login form.
 - [ ] **📤 Upload** → upload `data/mattina_napoli.pdf` → spinner runs → preview shows `offer_number "15789678/1"`, `monthly_fee 646.21`, `vehicle_brand "BYD"`, `customer_fiscal_code` → null (the source PDF leaves "CF Cliente" blank — Mattina's seed UPDATE in `db/03_seed.sql` backfills `RSSMRA80A01H501U`).
 - [ ] After **✅ Conferma e salva** the row appears in **📊 Esplora tutti** with the PDF link working.
