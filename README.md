@@ -1,123 +1,133 @@
-# Mobility AI — Knowledge Base PoC
-
-Functional Proof-of-Concept of the **Knowledge Base** component of *Mobility AI / Intelligence Hub* — a SaaS for Italian Long-Term Rental (NLT) brokers like **The Hurry**.
-
-The KB receives **Arval quote PDFs**, parses them with Claude Haiku 4.5, normalizes the data into Supabase Postgres, stores the original PDFs in Supabase Storage, and exposes a **structured search API** that returns historical quotes ranked by similarity to a query (scores 0.00–1.00; ≥ 0.80 = strong match).
-
-> **This is a real PoC, not a mock.** The parser actually parses, the database actually queries, the search actually scores. It runs on free-tier infrastructure but the code paths are production-shaped.
-
-The single source of truth for the design is `KB_SCAFFOLDING.md` (kept outside this repo). All hard constraints listed there apply.
+<div align="center">
+  <img src="assets/hurry_logo.svg" width="120" alt="The Hurry"/>
+  <h1>Mobility AI — Knowledge Base PoC</h1>
+  <p><em>Quote intelligence platform per <a href="https://www.the-hurry.com/">The Hurry</a></em></p>
+</div>
 
 ---
 
-## Architecture (one diagram, in prose)
+Proof-of-Concept funzionale del componente **Knowledge Base** della piattaforma **Mobility AI / Intelligence Hub** — il SaaS per i broker italiani di Noleggio a Lungo Termine come **The Hurry**.
 
-1. **Streamlit app** (single Python process) → Login → Upload / Search / Browse pages.
-2. **PDF upload** → Supabase Storage bucket `arval_quotes` (public read).
-3. **Parser** → Claude Haiku 4.5 reads the PDF natively, returns strict JSON.
-4. **Insert** → row in Supabase Postgres `quotations` table.
-5. **Search** → form filters → `POST /rest/v1/rpc/search_quotations` (PostgREST exposes the SQL function automatically — *no FastAPI, no separate API service*).
+La KB riceve **PDF di preventivi Arval**, li analizza con Claude Haiku 4.5, normalizza i dati su Supabase Postgres, archivia i PDF originali su Supabase Storage ed espone una **API di ricerca strutturata** che restituisce i preventivi storici ordinati per affinità (punteggio 0.00–1.00; ≥ 0.80 = match forte).
 
-Hard constraints: no FastAPI, no embeddings/pgvector, no real auth (mocked), no ORM, no Docker, no build pipeline beyond `requirements.txt`.
+> **È un PoC reale, non un mock.** Il parser estrae davvero, il database fa query vere, il punteggio di ricerca è calcolato dal motore. Gira su free tier ma le code-path sono "production-shaped".
+
+L'unica fonte di verità del design è `KB_SCAFFOLDING.md` (fuori dal repo). Tutti i vincoli "hard" elencati lì si applicano.
 
 ---
 
-## Repository layout
+## Architettura (un diagramma, in prosa)
+
+1. **App Streamlit** (singolo processo Python) → Login → pagine Upload / Cerca / Esplora.
+2. **Upload PDF** → bucket Supabase Storage `arval_quotes` (lettura pubblica).
+3. **Parser** → Claude Haiku 4.5 legge il PDF nativamente, restituisce JSON strict.
+4. **Insert** → riga su Postgres tabella `quotations`.
+5. **Cerca** → form filters → `POST /rest/v1/rpc/search_quotations` (PostgREST espone la SQL function automaticamente — *no FastAPI, nessun servizio API separato*).
+
+Vincoli di progetto: niente FastAPI, niente embeddings/pgvector, niente auth reale (mocked), niente ORM, niente Docker, build pipeline limitata a `requirements.txt`.
+
+---
+
+## Struttura del repository
 
 ```
 .
-├── streamlit_app.py              # Entry point: login gate + welcome page
+├── streamlit_app.py              # entry point: gate di login + welcome page
 ├── requirements.txt
 ├── .streamlit/
-│   ├── config.toml               # Brand theme (#1B3A8A primary) + maxUploadSize
-│   └── secrets.toml.example      # Template — real secrets stay local / in Streamlit Cloud
+│   ├── config.toml               # tema brand The Hurry (#710B41 primary) + maxUploadSize
+│   └── secrets.toml.example      # template — il file vero resta locale o su Streamlit Cloud
+├── assets/
+│   ├── hurry_logo.svg            # logo wordmark Hurry (colorato in maroon brand)
+│   └── hurry_punto.svg           # accent del punto esclamativo
 ├── lib/
 │   ├── __init__.py
-│   ├── auth.py                   # Mocked login (MOCK_USERS dict + session gate)
+│   ├── auth.py                   # mock login (dict MOCK_USERS + gate di sessione)
+│   ├── branding.py               # st.logo() helper + palette
 │   ├── parser.py                 # Claude Haiku 4.5: PDF → JSON
-│   ├── storage.py                # Supabase wrappers (Postgres + Storage + RPC)
+│   ├── storage.py                # wrapper Supabase (Postgres + Storage + RPC)
 │   └── schemas.py                # Pydantic QuoteRecord + SearchFilters
 ├── pages/
-│   ├── 1_📤_Upload.py            # Upload PDF → parse → review → save (with rollback)
-│   ├── 2_🔍_Search.py            # Structured filters → ranked results + breakdown
-│   └── 3_📊_Browse_All.py        # Sortable dataframe + CSV download
+│   ├── 1_📤_Upload.py            # upload PDF → parse → review → save (con rollback)
+│   ├── 2_🔍_Search.py            # filtri strutturati → risultati ranked + breakdown
+│   └── 3_📊_Browse_All.py        # tabella ordinabile + download CSV
 ├── db/
-│   ├── 01_schema.sql             # quotations table + 6 indexes
-│   ├── 01b_quotations_rls.sql    # disable RLS on quotations (PoC mock auth)
-│   ├── 02_search_function.sql    # search_quotations() RPC + grants
-│   ├── 02b_storage_policies.sql  # storage policies for arval_quotes bucket
-│   └── 03_seed.sql               # 20 hand-crafted records + Mattina CF backfill
+│   ├── 01_schema.sql             # tabella quotations + 6 indici
+│   ├── 01b_quotations_rls.sql    # disabilita RLS su quotations (PoC ha solo mock auth)
+│   ├── 02_search_function.sql    # RPC search_quotations() + GRANT
+│   ├── 02b_storage_policies.sql  # policy storage per il bucket arval_quotes
+│   └── 03_seed.sql               # 20 record curati a mano + backfill CF di Mattina
 ├── data/
-│   └── mattina_napoli.pdf        # canonical real Arval quote
+│   └── mattina_napoli.pdf        # preventivo Arval canonico (anonimizzato)
 ├── scripts/
-│   └── test_parser.py            # CLI: parse a PDF, print JSON
-├── DEPLOY.md                     # Supabase + Streamlit Cloud walkthrough
-└── README.md                     # this file
+│   └── test_parser.py            # CLI: parsa un PDF, stampa il JSON
+├── DEPLOY.md                     # guida completa deploy (Supabase + Streamlit Cloud)
+└── README.md                     # questo file
 ```
 
 ---
 
-## Prerequisites
+## Prerequisiti
 
-- **Python 3.11+** (Streamlit Cloud uses 3.11; local dev tested on 3.12).
-- A **Supabase** project (free tier is enough — 500 MB DB, 1 GB Storage). Generated:
+- **Python 3.11+** (Streamlit Cloud usa 3.11; testato in locale su 3.12).
+- Un progetto **Supabase** (free tier basta — 500 MB DB, 1 GB Storage). Servono:
   - Project URL (`SUPABASE_URL`)
-  - `anon` API key (used by both the UI and the public REST API)
-  - `service_role` API key (only for one-shot admin/seed scripts; never embed in UI)
-- An **Anthropic API key** with access to `claude-haiku-4-5-20251001`.
-- The **canonical PDF** at `data/mattina_napoli.pdf` (already committed).
+  - chiave API `anon` (usata sia dalla UI sia dalla REST API pubblica)
+  - chiave API `service_role` (solo per script admin/seed; mai esposta in UI)
+- Una **API key Anthropic** con accesso a `claude-haiku-4-5-20251001`.
+- Il **PDF canonico** in `data/mattina_napoli.pdf` (già committato).
 
-> _Note on the canonical sample:_ the spec's acceptance criteria reference `chiara_innocenti.pdf` (the original real customer). The shareable demo PDF in this repo uses the fictitious customer **Mattina Napoli** with the same offer number, vehicle, fee, and km — so the parser still produces `offer_number "15789678/1"`, `monthly_fee 646.21`, `vehicle_brand "BYD"`. The fiscal-code field is absent on this sample (the PDF leaves "CF Cliente" blank).
+> _Nota sul sample canonico:_ i criteri di accettazione della spec referenziano `chiara_innocenti.pdf` (cliente reale). Il PDF demo nel repo usa il cliente fittizio **Mattina Napoli** con stesso numero offerta, veicolo, canone e km — quindi il parser produce comunque `offer_number "15789678/1"`, `monthly_fee 646.21`, `vehicle_brand "BYD"`. Il campo CF è vuoto sul PDF; il file `db/03_seed.sql` fa il backfill con il mock `RSSMRA80A01H501U`.
 
 ---
 
-## Local setup
+## Setup locale
 
 ```bash
-# 1. Clone & enter the repo
-git clone <this-repo-url> mobility-ai-kb
+# 1. Clone del repo
+git clone https://github.com/bluecaterpillar/mobility-ai-kb.git
 cd mobility-ai-kb
 
-# 2. Create & activate a virtualenv
+# 2. Virtualenv
 python3 -m venv .venv
-source .venv/bin/activate   # macOS / Linux
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
-# 3. Install dependencies
+# 3. Dipendenze
 pip install -r requirements.txt
 
-# 4. Provision secrets
+# 4. Provision dei secret
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# Then edit .streamlit/secrets.toml and paste your real Supabase + Anthropic keys.
+# Apri .streamlit/secrets.toml e incolla URL Supabase + anon key + Anthropic key
 ```
 
-### Provision the database (one-time, in the Supabase SQL editor)
+### Provisioning del database (una volta sola, nel SQL editor di Supabase)
 
-Run the five files in `db/` **in this order** (paste each into a new SQL Editor query and run):
+Esegui i 5 file in `db/` **in quest'ordine** (un nuovo SQL Editor query per ognuno):
 
-| | File | Purpose |
+| | File | A cosa serve |
 |---|---|---|
-| 1 | `db/01_schema.sql` | `quotations` table + indexes |
-| 2 | `db/01b_quotations_rls.sql` | disable RLS on `quotations` (PoC has mock auth only) |
-| 3 | `db/02_search_function.sql` | `search_quotations()` RPC + `GRANT EXECUTE` to `anon` |
-| 4 | `db/02b_storage_policies.sql` | INSERT/SELECT/DELETE policies on `storage.objects` for the bucket |
-| 5 | `db/03_seed.sql` | 20 hand-crafted demo rows + backfill of Mattina's mock CF |
+| 1 | `db/01_schema.sql` | tabella `quotations` + indici |
+| 2 | `db/01b_quotations_rls.sql` | disabilita RLS su `quotations` (il PoC ha solo mock auth) |
+| 3 | `db/02_search_function.sql` | RPC `search_quotations()` + `GRANT EXECUTE` ad `anon` |
+| 4 | `db/02b_storage_policies.sql` | policy INSERT/SELECT/DELETE su `storage.objects` per il bucket |
+| 5 | `db/03_seed.sql` | 20 record seed + backfill CF mock di Mattina |
 
-In Supabase **Storage**, create a bucket named `arval_quotes` with **Public bucket** ✅ enabled.
+Su **Storage** crea un bucket `arval_quotes` con flag **Public bucket** ✅.
 
-For the full deployment walkthrough (including Streamlit Community Cloud setup and troubleshooting) see [`DEPLOY.md`](DEPLOY.md).
+Walkthrough completo del deploy (Streamlit Community Cloud incluso): vedi [`DEPLOY.md`](DEPLOY.md).
 
 ---
 
-## Run locally
+## Esecuzione in locale
 
-### Smoke-test the parser (Milestone A)
+### Smoke-test del parser
 
 ```bash
-# Reads the API key from .streamlit/secrets.toml or ANTHROPIC_API_KEY.
+# Legge la API key da .streamlit/secrets.toml o ANTHROPIC_API_KEY.
 python scripts/test_parser.py data/mattina_napoli.pdf
 ```
 
-Expected fields in the printed JSON include:
+Output JSON atteso (campi load-bearing):
 
 ```json
 {
@@ -138,22 +148,22 @@ Expected fields in the printed JSON include:
 }
 ```
 
-### Run the Streamlit app
+### Avvio dell'app Streamlit
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-Login with `demo.thehurry / demo2026` (mock — see `lib/auth.py`). Other demo accounts are listed in `.streamlit/secrets.toml.example`.
+Login con `demo.thehurry / demo2026` (mock — `lib/auth.py`). Altri account demo elencati in `.streamlit/secrets.toml.example`.
 
 ---
 
-## Test the public API
+## Test della API pubblica
 
-Supabase auto-exposes the SQL function at `POST /rest/v1/rpc/search_quotations`. The same `anon` key the Streamlit app uses is the API key for external callers — *no FastAPI, no separate backend.*
+Supabase espone automaticamente la SQL function come `POST /rest/v1/rpc/search_quotations`. La stessa `anon` key usata dall'app Streamlit è la chiave per i caller esterni — *no FastAPI, nessun backend separato*.
 
 ```bash
-ANON_KEY="eyJ..."   # from Supabase → Settings → API → Project API keys → anon public
+ANON_KEY="eyJ..."   # da Supabase → Settings → API → Project API keys → anon public
 
 curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
   -H "apikey: $ANON_KEY" \
@@ -170,7 +180,7 @@ curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
   }' | jq '.[] | {customer_full_name, score, monthly_fee, vehicle_full_name}'
 ```
 
-Expected first three rows after `db/03_seed.sql` is loaded **and** the Mattina PDF has been uploaded via the Upload page:
+Prime tre righe attese (con `db/03_seed.sql` caricato **e** Mattina già uploadata via app):
 
 ```json
 { "customer_full_name": "Mattina Napoli", "score": "0.998", "monthly_fee": "646.21", "vehicle_full_name": "BYD SEAL U DM-i 1.5 324cv Design" }
@@ -178,19 +188,36 @@ Expected first three rows after `db/03_seed.sql` is loaded **and** the Mattina P
 { "customer_full_name": "Andrea Trento",  "score": "0.894", "monthly_fee": "580.00", "vehicle_full_name": "Cupra Formentor 1.5 e-Hybrid 245cv VZ" }
 ```
 
-Every RPC parameter is optional — pass only the ones you care about; the score is a weighted average over the active features only. See spec §4 for the full weight table.
+Tutti i parametri della RPC sono opzionali — passa solo quelli che ti interessano; lo score è una media pesata sulle sole feature presenti. Pesi e formula nella spec §4.
 
 ---
 
-## Milestones
+## Identità visiva
 
-| | Milestone | Status |
+Il PoC adotta i colori di [The Hurry](https://www.the-hurry.com):
+
+| Elemento | Colore | Hex |
 |---|---|---|
-| A | DB schema + RPC + parser + storage + schemas + CLI | ✅ done |
-| B | Streamlit skeleton + mocked login | ✅ done |
-| C | Upload page (end-to-end with rollback) | ✅ done |
-| D | 20 hand-crafted seed records | ✅ done |
-| E | Search + Browse pages | ✅ done |
-| F | Polish + `DEPLOY.md` + acceptance review | ✅ done |
+| Primary | Maroon Hurry | `#710B41` |
+| Dark accent | Maroon scuro | `#4B072B` |
+| Surface secondaria | Rosa chiarissimo | `#F5EFF2` |
+| Background | Bianco | `#FFFFFF` |
 
-Full deployment walkthrough: [`DEPLOY.md`](DEPLOY.md).
+Il logo `assets/hurry_logo.svg` viene mostrato:
+- in alto nella sidebar di tutte le pagine (via `st.logo()` in `lib/branding.py`)
+- come hero centrato sulla pagina di login (`render_login_hero()`)
+
+---
+
+## Milestone
+
+| | Milestone | Stato |
+|---|---|---|
+| A | Schema DB + RPC + parser + storage + schemas + CLI | ✅ done |
+| B | Skeleton Streamlit + login mockato | ✅ done |
+| C | Pagina Upload (end-to-end con rollback) | ✅ done |
+| D | 20 record seed curati a mano | ✅ done |
+| E | Pagine Cerca + Esplora | ✅ done |
+| F | Polish + `DEPLOY.md` + acceptance review + brand The Hurry | ✅ done |
+
+Walkthrough completo del deploy: [`DEPLOY.md`](DEPLOY.md).

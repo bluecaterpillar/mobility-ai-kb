@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from lib.branding import render_login_hero
+
 MOCK_USERS: dict[str, str] = {
     "demo.thehurry": "demo2026",
     "carlo.galati": "thehurry",
@@ -30,21 +32,30 @@ def logout() -> None:
 
 def login_form() -> None:
     """Render the login form. On success, sets session state and reruns."""
-    st.title("Mobility AI — Login")
-    st.caption("Knowledge Base demo per The Hurry")
+    render_login_hero()
 
-    with st.form("login"):
-        username = st.text_input("Utenza", value="demo.thehurry")
-        password = st.text_input("Password", type="password", value="demo2026")
-        submitted = st.form_submit_button("Accedi", type="primary")
+    centre = st.columns([1, 2, 1])[1]
+    with centre:
+        st.markdown(
+            "<h2 style='text-align:center;margin:0.25rem 0 0;'>Mobility AI — Knowledge Base</h2>"
+            "<p style='text-align:center;color:#6b6470;margin-bottom:1.5rem;'>"
+            "Quote intelligence platform per The Hurry</p>",
+            unsafe_allow_html=True,
+        )
+        with st.form("login"):
+            username = st.text_input("Utenza", value="demo.thehurry")
+            password = st.text_input("Password", type="password", value="demo2026")
+            submitted = st.form_submit_button(
+                "Accedi", type="primary", use_container_width=True
+            )
 
-        if submitted:
-            if MOCK_USERS.get(username) == password:
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.rerun()
-            else:
-                st.error("Credenziali non valide")
+            if submitted:
+                if MOCK_USERS.get(username) == password:
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("Credenziali non valide")
 
 
 def require_login() -> None:

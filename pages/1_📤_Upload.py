@@ -12,6 +12,7 @@ from uuid import uuid4
 import streamlit as st
 
 from lib.auth import current_username, render_sidebar_user_box, require_login
+from lib.branding import apply_branding
 from lib.parser import PARSER_VERSION, parse_arval_pdf
 from lib.storage import (
     delete_pdf,
@@ -27,6 +28,7 @@ st.set_page_config(
     layout="wide",
 )
 
+apply_branding()
 require_login()
 
 

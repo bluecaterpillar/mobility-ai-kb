@@ -1,8 +1,9 @@
 [theme]
-primaryColor = "#1B3A8A"
-backgroundColor = "#FAFAFA"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#0F172A"
+# The Hurry brand palette (https://www.the-hurry.com)
+primaryColor = "#710B41"            # Hurry maroon
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5EFF2"  # very light pink — soft brand surface
+textColor = "#1A1A1A"
 font = "sans serif"
 
 [server]

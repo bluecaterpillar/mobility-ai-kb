@@ -8,14 +8,16 @@ from __future__ import annotations
 import streamlit as st
 
 from lib.auth import render_sidebar_user_box, require_login
+from lib.branding import apply_branding
 
 st.set_page_config(
-    page_title="Mobility AI — Knowledge Base",
-    page_icon="🚗",
+    page_title="Mobility AI — Knowledge Base · The Hurry",
+    page_icon="assets/hurry_logo.svg",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
+apply_branding()
 require_login()
 
 st.title("Mobility AI — Knowledge Base")
@@ -31,11 +33,6 @@ st.markdown(
       preventivi simili con un punteggio di affinità (0.00–1.00).
     - 📊 **Esplora tutto** — sfoglia l'intero archivio in tabella.
     """
-)
-
-st.info(
-    "Le pagine di Upload, Cerca ed Esplora arriveranno nelle Milestone C / E. "
-    "Per ora questo è il punto di ingresso e la verifica della connessione Supabase."
 )
 
 with st.expander("Stato connessione (debug)"):

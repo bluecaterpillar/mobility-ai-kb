@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from lib.auth import render_sidebar_user_box, require_login
+from lib.branding import apply_branding
 from lib.storage import get_client, search_quotes
 
 st.set_page_config(
@@ -21,6 +22,7 @@ st.set_page_config(
     layout="wide",
 )
 
+apply_branding()
 require_login()
 
 
