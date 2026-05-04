@@ -26,27 +26,33 @@ Hard constraints: no FastAPI, no embeddings/pgvector, no real auth (mocked), no 
 
 ```
 .
-├── streamlit_app.py              # Entry point (Milestone B)
+├── streamlit_app.py              # Entry point: login gate + welcome page
 ├── requirements.txt
 ├── .streamlit/
-│   ├── config.toml               # Theme (Milestone B)
+│   ├── config.toml               # Brand theme (#1B3A8A primary) + maxUploadSize
 │   └── secrets.toml.example      # Template — real secrets stay local / in Streamlit Cloud
 ├── lib/
 │   ├── __init__.py
-│   ├── auth.py                   # Mocked login (Milestone B)
-│   ├── parser.py                 # Claude API call, PDF → dict
-│   ├── storage.py                # Supabase wrappers (DB + bucket)
-│   └── schemas.py                # Pydantic QuoteRecord, SearchFilters
-├── pages/                        # Streamlit multi-page (Milestones C / E)
+│   ├── auth.py                   # Mocked login (MOCK_USERS dict + session gate)
+│   ├── parser.py                 # Claude Haiku 4.5: PDF → JSON
+│   ├── storage.py                # Supabase wrappers (Postgres + Storage + RPC)
+│   └── schemas.py                # Pydantic QuoteRecord + SearchFilters
+├── pages/
+│   ├── 1_📤_Upload.py            # Upload PDF → parse → review → save (with rollback)
+│   ├── 2_🔍_Search.py            # Structured filters → ranked results + breakdown
+│   └── 3_📊_Browse_All.py        # Sortable dataframe + CSV download
 ├── db/
-│   ├── 01_schema.sql             # quotations table + indexes
-│   ├── 02_search_function.sql    # search_quotations RPC
-│   └── 03_seed.sql               # 20 hand-crafted records (Milestone D)
+│   ├── 01_schema.sql             # quotations table + 6 indexes
+│   ├── 01b_quotations_rls.sql    # disable RLS on quotations (PoC mock auth)
+│   ├── 02_search_function.sql    # search_quotations() RPC + grants
+│   ├── 02b_storage_policies.sql  # storage policies for arval_quotes bucket
+│   └── 03_seed.sql               # 20 hand-crafted records + Mattina CF backfill
 ├── data/
 │   └── mattina_napoli.pdf        # canonical real Arval quote
 ├── scripts/
 │   └── test_parser.py            # CLI: parse a PDF, print JSON
-└── DEPLOY.md                     # Supabase + Streamlit Cloud walkthrough (Milestone F)
+├── DEPLOY.md                     # Supabase + Streamlit Cloud walkthrough
+└── README.md                     # this file
 ```
 
 ---
@@ -86,14 +92,19 @@ cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 
 ### Provision the database (one-time, in the Supabase SQL editor)
 
-```sql
--- Run in this order:
-\i db/01_schema.sql
-\i db/02_search_function.sql
--- (db/03_seed.sql will arrive in Milestone D)
-```
+Run the five files in `db/` **in this order** (paste each into a new SQL Editor query and run):
 
-In Supabase **Storage**, create a bucket named `arval_quotes` (Public read).
+| | File | Purpose |
+|---|---|---|
+| 1 | `db/01_schema.sql` | `quotations` table + indexes |
+| 2 | `db/01b_quotations_rls.sql` | disable RLS on `quotations` (PoC has mock auth only) |
+| 3 | `db/02_search_function.sql` | `search_quotations()` RPC + `GRANT EXECUTE` to `anon` |
+| 4 | `db/02b_storage_policies.sql` | INSERT/SELECT/DELETE policies on `storage.objects` for the bucket |
+| 5 | `db/03_seed.sql` | 20 hand-crafted demo rows + backfill of Mattina's mock CF |
+
+In Supabase **Storage**, create a bucket named `arval_quotes` with **Public bucket** ✅ enabled.
+
+For the full deployment walkthrough (including Streamlit Community Cloud setup and troubleshooting) see [`DEPLOY.md`](DEPLOY.md).
 
 ---
 
@@ -133,18 +144,20 @@ Expected fields in the printed JSON include:
 streamlit run streamlit_app.py
 ```
 
-Login with `demo.thehurry / demo2026` (mock — see `lib/auth.py` once Milestone B lands).
+Login with `demo.thehurry / demo2026` (mock — see `lib/auth.py`). Other demo accounts are listed in `.streamlit/secrets.toml.example`.
 
 ---
 
-## Public search API
+## Test the public API
 
-Once Milestones A + D are live the search RPC is reachable as a plain HTTPS POST — no separate backend, no FastAPI:
+Supabase auto-exposes the SQL function at `POST /rest/v1/rpc/search_quotations`. The same `anon` key the Streamlit app uses is the API key for external callers — *no FastAPI, no separate backend.*
 
 ```bash
+ANON_KEY="eyJ..."   # from Supabase → Settings → API → Project API keys → anon public
+
 curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
-  -H "apikey: $SUPABASE_ANON_KEY" \
-  -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+  -H "apikey: $ANON_KEY" \
+  -H "Authorization: Bearer $ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "p_target_monthly_fee": 650,
@@ -154,10 +167,18 @@ curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
     "p_motorization": "phev",
     "p_min_score": 0.8,
     "p_limit": 5
-  }'
+  }' | jq '.[] | {customer_full_name, score, monthly_fee, vehicle_full_name}'
 ```
 
-(Full curl + response example will land with Milestone F.)
+Expected first three rows after `db/03_seed.sql` is loaded **and** the Mattina PDF has been uploaded via the Upload page:
+
+```json
+{ "customer_full_name": "Mattina Napoli", "score": "0.998", "monthly_fee": "646.21", "vehicle_full_name": "BYD SEAL U DM-i 1.5 324cv Design" }
+{ "customer_full_name": "Sofia Bari",     "score": "0.913", "monthly_fee": "720.00", "vehicle_full_name": "Volvo XC40 Recharge T5 PHEV Inscription" }
+{ "customer_full_name": "Andrea Trento",  "score": "0.894", "monthly_fee": "580.00", "vehicle_full_name": "Cupra Formentor 1.5 e-Hybrid 245cv VZ" }
+```
+
+Every RPC parameter is optional — pass only the ones you care about; the score is a weighted average over the active features only. See spec §4 for the full weight table.
 
 ---
 
@@ -165,11 +186,11 @@ curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
 
 | | Milestone | Status |
 |---|---|---|
-| A | DB schema + RPC + parser + storage + schemas + CLI | **in review** |
-| B | Streamlit skeleton + mocked login | pending |
-| C | Upload page (end-to-end) | pending |
-| D | 20 hand-crafted seed records | pending |
-| E | Search + Browse pages | pending |
-| F | Polish + DEPLOY.md + acceptance review | pending |
+| A | DB schema + RPC + parser + storage + schemas + CLI | ✅ done |
+| B | Streamlit skeleton + mocked login | ✅ done |
+| C | Upload page (end-to-end with rollback) | ✅ done |
+| D | 20 hand-crafted seed records | ✅ done |
+| E | Search + Browse pages | ✅ done |
+| F | Polish + `DEPLOY.md` + acceptance review | ✅ done |
 
-Deployment walkthrough lives in [`DEPLOY.md`](DEPLOY.md) (Milestone F).
+Full deployment walkthrough: [`DEPLOY.md`](DEPLOY.md).
