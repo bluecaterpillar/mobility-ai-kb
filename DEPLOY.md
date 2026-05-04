@@ -2,7 +2,7 @@
 
 End-to-end setup: Supabase free project + Streamlit Community Cloud + Anthropic API. Roughly **30 minutes** start to finish, assuming you already have accounts.
 
-> 🟢 **Live reference deploy:** [mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app](https://mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app/) · login `demo.thehurry / demo2026` (set the app to **public** in Streamlit Cloud → Settings → Sharing if you want unauthenticated visitors).
+> 🟢 **Live reference deploy:** [mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app](https://mobility-ai-kb-sy7hhwyck9omfdxiqk5zmt.streamlit.app/) · login `demo.thehurry / demo2026`
 
 ---
 
@@ -159,13 +159,11 @@ Click **Deploy**. First build takes ~3 min (pip resolves the deps). On success y
 
 > **Heads-up:** Streamlit Community Cloud requires a public GitHub repo on the free tier. Make sure no secret ever lands in a commit. The `.gitignore` covers `.streamlit/secrets.toml` — verify with `git status` before each push.
 
-### 4.5 — Make the app publicly viewable (optional)
+### 4.5 — Sharing & the cold-start redirect
 
-By default a new Streamlit Cloud app is **private** — visitors are bounced to `/-/login` (Streamlit's own auth wall) before they ever see your mock login. To let anyone reach the demo:
+In **Settings → Sharing** make sure "Who can view this app" is set to **"This app is public and searchable"** (this is the default for new apps). Even when public, the very first hit after a cold start may briefly bounce through `share.streamlit.io/-/auth/app?redirect_uri=...` — Streamlit Cloud's edge layer setting an anonymous session cookie. Browsers follow it transparently; only `curl` without a cookie jar gets stuck in the redirect. If you must verify with curl, pass `-c cookies.txt -b cookies.txt -L --max-redirs 5` and you'll land on `HTTP 200`.
 
-> **Settings → Sharing** → toggle **"Anyone with the URL can view this app"** → Save.
-
-The `demo.thehurry / demo2026` mock credentials remain the actual gate inside the app, so this just removes the upstream Streamlit-Cloud login layer.
+The `demo.thehurry / demo2026` mock credentials remain the actual access gate **inside** the app — the public toggle just controls whether visitors can reach the mock login form at all.
 
 ---
 
