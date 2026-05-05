@@ -4,6 +4,11 @@
 .env.*
 !.env.example
 
+# Internal business deliverables — kept local
+docs/
+*.pdf
+!data/*.pdf
+
 # Python
 __pycache__/
 *.py[cod]
