@@ -19,6 +19,15 @@ La KB riceve **PDF di preventivi Arval**, li analizza con Claude Haiku 4.5, norm
 
 L'unica fonte di verità del design è `KB_SCAFFOLDING.md` (fuori dal repo). Tutti i vincoli "hard" elencati lì si applicano.
 
+### Funzionalità chiave
+
+- 📤 **Upload PDF → JSON in 3–5 sec** — Claude Haiku 4.5 estrae 30+ campi dal PDF Arval (offer number, cliente, veicolo, motore, canone, anticipo, servizi inclusi/esclusi) senza pdfplumber né OCR.
+- 🔍 **Ricerca strutturata con scoring esplicito** — filtri categorici (tipo veicolo, brand, motorizzazione) + target numerici (canone, durata, km, anticipo) → media pesata trasparente con breakdown per feature.
+- 🕒 **Recency-aware ranking** — i preventivi più recenti vincono a parità di match (peso 10 %, decadimento lineare su 24 mesi). Data preventivo visibile in tutta la UI.
+- 🌐 **API pubblica zero-config** — la SQL function è esposta automaticamente da Supabase PostgREST: `POST /rest/v1/rpc/search_quotations` per ogni chat AI / agente esterno, senza FastAPI.
+- 🔁 **Upload transazionale** — se l'INSERT in DB fallisce dopo l'upload del PDF in storage, il PDF viene rimosso automaticamente (no orfani).
+- 🎨 **Brand The Hurry** — palette maroon `#710B41`, logo wordmark su login e sidebar di ogni pagina.
+
 ---
 
 ## Architettura (un diagramma, in prosa)
@@ -216,6 +225,28 @@ Tutti i parametri della RPC sono opzionali — passa solo quelli che ti interess
 
 ---
 
+## Scenari demo (provali sul live)
+
+| # | Filtri sulla pagina **🔍 Cerca** | Risultato atteso |
+|---|---|---|
+| 1 | Tipo `[suv]` · Motor `[phev]` · Canone `650` · Durata `48` · Km `100000` · Score min `0.80` | Mattina Napoli in cima a ~1.00, poi Giulia / Sofia / Marco / Lorenzo / Andrea fra 0.84–0.89. Recency separa visibilmente i record nuovi (Giulia, 30gg) dai più vecchi (Andrea, 15mo). |
+| 2 | Tipo `[city_car]` · Motor `[benzina]` · Canone `280` · Durata `36` | Chiara Genova (Fiat Panda 1.2 Pop) ≈ 1.00, poi e-C3 elettrico e Panda GPL come alternative fuzzy. |
+| 3 | Tipo cliente `B2B` · Tipo `[berlina]` · Motor `[elettrico]` · Canone `600` · Durata `48` | Federica Pisa (Tesla Model 3) come match forte. |
+| 4 | Nessun filtro, score min `0.0` | Feed "più recenti prima" — il recency factor diventa l'unica feature attiva. |
+
+---
+
+## Limiti del PoC (out of scope)
+
+- **Multi-vendor parsing** — solo Arval. Schema pronto per multi-vendor (`vendor` text column) ma il parser è tarato sul template Arval.
+- **Auth reale** — `MOCK_USERS` dict in `lib/auth.py`. Per produzione: Clerk / Auth0 / Cognito + RLS vera per tenant.
+- **Search semantica** — solo strutturata (filtri + media pesata). Embedding-based hybrid search è la naturale estensione produttiva, vedi [`DEPLOY.md`](DEPLOY.md).
+- **Audit log / GDPR** — niente trail su upload / delete. I PDF clienti sono dati personali → in produzione bucket privato + signed URL + retention policy.
+- **Rate limiting** — affida ai default di Supabase. In produzione: Upstash Redis davanti alla RPC o BotID di Vercel.
+- **Mobile UI** — testato su desktop. Streamlit fa best-effort mobile ma il form di ricerca a 8 colonne non è ottimale su smartphone.
+
+---
+
 ## Identità visiva
 
 Il PoC adotta i colori di [The Hurry](https://www.the-hurry.com):
@@ -243,5 +274,12 @@ Il logo `assets/hurry_logo.svg` viene mostrato:
 | D | 20 record seed curati a mano | ✅ done |
 | E | Pagine Cerca + Esplora | ✅ done |
 | F | Polish + `DEPLOY.md` + acceptance review + brand The Hurry + deploy live | ✅ done |
+| G | Recency-aware ranking + data preventivo visibile ovunque | ✅ done |
 
 Walkthrough completo del deploy: [`DEPLOY.md`](DEPLOY.md).
+
+---
+
+## Verso la produzione
+
+Il PoC copre architettura, parser, ricerca strutturata e demo brandizzato. Per portarlo a un servizio in produzione (auth reale, multi-tenant, ingestion async, embedding hybrid search, osservabilità) la roadmap stimata è **~10–14 settimane** di sviluppo con un team di 2 fullstack senior + 0.5 tech lead + design / DevOps part-time, su stack **Vercel + Supabase + Claude (via AI Gateway)** per un run-rate di **~$135/mese** a 30 op./giorno + 100 query API/giorno. Per dettagli e opzioni alternative (AWS, Render+Neon) chiedi il *Production Plan* — è un deliverable interno, non distribuito in questo repo pubblico.
