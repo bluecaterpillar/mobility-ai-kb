@@ -1,7 +1,14 @@
 -- Mobility AI — Knowledge Base PoC
--- search_quotations() RPC (per KB_SCAFFOLDING.md §4).
+-- search_quotations() RPC (per KB_SCAFFOLDING.md §4 + recency extension).
 -- Auto-exposed by Supabase as POST /rest/v1/rpc/search_quotations.
 -- Run after 01_schema.sql. Idempotent: CREATE OR REPLACE.
+--
+-- Recency factor (added 2026-05):
+-- s_recency is a linear decay over RECENCY_HORIZON_MONTHS (24) computed from
+-- q.created_at. Weight 0.10 — small enough that match-quality still dominates,
+-- big enough that newer quotes win ties and beat moderately older quotes that
+-- match only slightly better. Created_at is also returned as a top-level
+-- column and broken out in score_breakdown.
 
 create or replace function search_quotations(
   p_vendor                  text     default 'arval',
@@ -18,6 +25,7 @@ create or replace function search_quotations(
 )
 returns table (
   id                  uuid,
+  created_at          timestamptz,
   offer_number        text,
   customer_full_name  text,
   vehicle_full_name   text,
@@ -32,11 +40,14 @@ returns table (
   score_breakdown     jsonb
 )
 language plpgsql as $$
+declare
+  recency_horizon_days constant numeric := 24 * 30;  -- 24 months, treated as 720 days
 begin
   return query
   with scored as (
     select
       q.id,
+      q.created_at,
       q.offer_number,
       (q.customer_first_name || ' ' || q.customer_last_name) as customer_full_name,
       (q.vehicle_brand || ' ' || q.vehicle_model || ' ' || coalesce(q.vehicle_version, '')) as vehicle_full_name,
@@ -78,7 +89,14 @@ begin
       case when p_motorization is null then null
            when q.motorization = p_motorization then 1.0
            else 0.0
-      end as s_motor
+      end as s_motor,
+
+      -- Recency: 1.0 for "just created", linearly decays to 0 at 24 months old.
+      -- Always present (created_at is NOT NULL), so it always contributes.
+      greatest(
+        0,
+        1 - extract(epoch from (now() - q.created_at)) / (recency_horizon_days * 86400)
+      )::numeric as s_recency
 
     from quotations q
     where q.vendor = p_vendor
@@ -87,6 +105,8 @@ begin
   weighted as (
     select s.*,
       -- Weighted average over only the non-NULL components.
+      -- Recency (0.10) is always counted; the rest are nulled-out when the
+      -- corresponding filter wasn't provided.
       (
         coalesce(s.s_fee      * 0.30, 0) +
         coalesce(s.s_duration * 0.15, 0) +
@@ -94,7 +114,8 @@ begin
         coalesce(s.s_type     * 0.15, 0) +
         coalesce(s.s_brand    * 0.10, 0) +
         coalesce(s.s_anticipo * 0.10, 0) +
-        coalesce(s.s_motor    * 0.05, 0)
+        coalesce(s.s_motor    * 0.05, 0) +
+                 s.s_recency  * 0.10
       ) / nullif(
         (case when s.s_fee      is null then 0 else 0.30 end) +
         (case when s.s_duration is null then 0 else 0.15 end) +
@@ -102,12 +123,14 @@ begin
         (case when s.s_type     is null then 0 else 0.15 end) +
         (case when s.s_brand    is null then 0 else 0.10 end) +
         (case when s.s_anticipo is null then 0 else 0.10 end) +
-        (case when s.s_motor    is null then 0 else 0.05 end),
+        (case when s.s_motor    is null then 0 else 0.05 end) +
+        0.10,                            -- recency always on
       0) as final_score
     from scored s
   )
   select
     w.id,
+    w.created_at,
     w.offer_number,
     w.customer_full_name,
     w.vehicle_full_name,
@@ -126,11 +149,12 @@ begin
       'anticipo',     round(w.s_anticipo::numeric, 3),
       'vehicle_type', round(w.s_type::numeric,     3),
       'vehicle_brand',round(w.s_brand::numeric,    3),
-      'motorization', round(w.s_motor::numeric,    3)
+      'motorization', round(w.s_motor::numeric,    3),
+      'recency',      round(w.s_recency::numeric,  3)
     ) as score_breakdown
   from weighted w
   where w.final_score >= p_min_score
-  order by w.final_score desc
+  order by w.final_score desc, w.created_at desc   -- newer wins on tie
   limit p_limit;
 end;
 $$;

@@ -46,13 +46,20 @@ Open **SQL Editor** → **New query**. Run each file's contents from `db/`, **in
 |---|---|---|
 | 1 | `db/01_schema.sql` | Creates the `quotations` table with enum CHECKs, a generated `km_annual` column, and six search indexes |
 | 2 | `db/01b_quotations_rls.sql` | Disables RLS on `quotations` (PoC has no real auth — see hard constraint #3) |
-| 3 | `db/02_search_function.sql` | Creates the `search_quotations()` RPC and grants `EXECUTE` to `anon`/`authenticated` |
+| 3 | `db/02_search_function.sql` | Creates the `search_quotations()` RPC (with recency factor, weight 0.10) and grants `EXECUTE` to `anon`/`authenticated` |
 | 4 | `db/02b_storage_policies.sql` | Adds INSERT / SELECT / DELETE policies on `storage.objects` for the `arval_quotes` bucket |
-| 5 | `db/03_seed.sql` | Inserts the 20 hand-crafted demo records |
+| 5 | `db/03_seed.sql` | Inserts the 20 hand-crafted demo records (with explicit `created_at` spread across the last 18 months so the recency factor has signal) |
 
 Each `Run` should report `Success. No rows returned`.
 
 > **Re-runnable:** all five files are idempotent. The seed wipes prior `parser_version='seed-v1'` rows before inserting, so re-running is safe.
+
+### Migrating an existing project to the recency-aware RPC
+
+If your Supabase project already has the function/seed from a prior version (no recency factor):
+
+1. Re-run `db/02_search_function.sql` — `CREATE OR REPLACE FUNCTION` swaps the implementation in place. The new function returns an additional `created_at timestamptz` column and a `recency` key inside `score_breakdown`. Existing API clients that only consume named keys keep working.
+2. Re-run `db/03_seed.sql` — the `DELETE ... WHERE parser_version='seed-v1'` plus `INSERT` block applies fresh `created_at` values for demo realism. Records uploaded via the app (`parser_version='claude-haiku-4-5-v1'`) are not touched.
 
 ### 1.3 — Create the storage bucket
 

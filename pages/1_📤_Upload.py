@@ -45,6 +45,7 @@ SESSION_KEYS = (
     "upload_filename",
     "upload_persisted",
     "upload_inserted_id",
+    "upload_inserted_created_at",
     "upload_uploader_nonce",
 )
 
@@ -200,6 +201,7 @@ elif phase == "review":
 
         st.session_state.upload_persisted = True
         st.session_state.upload_inserted_id = inserted.get("id")
+        st.session_state.upload_inserted_created_at = inserted.get("created_at")
         st.toast("Preventivo salvato nella KB ✅", icon="✅")
         st.rerun()
 
@@ -216,6 +218,17 @@ elif phase == "saved":
     parsed = st.session_state.get("upload_parsed", {})
     inserted_id = st.session_state.get("upload_inserted_id")
     pdf_url = st.session_state.get("upload_pdf_url")
+    created_at = st.session_state.get("upload_inserted_created_at")
+
+    def _fmt_created(value):
+        if not value:
+            return "—"
+        if isinstance(value, datetime):
+            return value.strftime("%d/%m/%Y %H:%M")
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            return str(value)
 
     info_cols = st.columns(2)
     with info_cols[0]:
@@ -226,6 +239,7 @@ elif phase == "saved":
             f"**Cliente:** {parsed.get('customer_first_name', '')} "
             f"{parsed.get('customer_last_name', '')}"
         )
+        st.markdown(f"**Data preventivo:** {_fmt_created(created_at)}")
     with info_cols[1]:
         st.markdown(
             f"**Veicolo:** {parsed.get('vehicle_brand', '')} "

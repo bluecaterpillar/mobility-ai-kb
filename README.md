@@ -31,6 +31,23 @@ L'unica fonte di verità del design è `KB_SCAFFOLDING.md` (fuori dal repo). Tut
 
 Vincoli di progetto: niente FastAPI, niente embeddings/pgvector, niente auth reale (mocked), niente ORM, niente Docker, build pipeline limitata a `requirements.txt`.
 
+### Ranking (formula di matching)
+
+`search_quotations()` calcola uno score in `[0, 1]` come **media pesata** dei sotto-score per ogni feature attiva:
+
+| Feature | Peso | Calcolo |
+|---|---|---|
+| Canone mensile | 30 % | `1 - |fee − target| / target` |
+| Durata | 15 % | `1 - |durata − target| / target` |
+| Km totali | 15 % | `1 - |km − target| / target` |
+| Tipo veicolo | 15 % | 1 se uguale, 0 altrimenti |
+| Anticipo | 10 % | `1 - |anticipo − target| / max(target, 1000)` |
+| Brand | 10 % | 1 se uguale, 0 altrimenti |
+| **Recency** | **10 %** | `max(0, 1 - giorni_dalla_creazione / 720)` — decadimento lineare su 24 mesi |
+| Motorizzazione | 5 % | 1 se uguale, 0 altrimenti |
+
+La **recency è sempre attiva** (ogni riga ha `created_at`), quindi a parità di match il preventivo più recente vince. Le feature con filtro non impostato sono escluse sia dal numeratore che dal denominatore della media — lo score resta normalizzato in `[0, 1]` qualunque sia il sottoinsieme di filtri usato.
+
 ---
 
 ## Struttura del repository
@@ -185,13 +202,15 @@ curl -X POST "https://YOUR_PROJECT.supabase.co/rest/v1/rpc/search_quotations" \
   }' | jq '.[] | {customer_full_name, score, monthly_fee, vehicle_full_name}'
 ```
 
-Prime tre righe attese (con `db/03_seed.sql` caricato **e** Mattina già uploadata via app):
+Prime righe attese (con `db/03_seed.sql` caricato **e** Mattina già uploadata via app, recency factor attivo):
 
 ```json
-{ "customer_full_name": "Mattina Napoli", "score": "0.998", "monthly_fee": "646.21", "vehicle_full_name": "BYD SEAL U DM-i 1.5 324cv Design" }
-{ "customer_full_name": "Sofia Bari",     "score": "0.913", "monthly_fee": "720.00", "vehicle_full_name": "Volvo XC40 Recharge T5 PHEV Inscription" }
-{ "customer_full_name": "Andrea Trento",  "score": "0.894", "monthly_fee": "580.00", "vehicle_full_name": "Cupra Formentor 1.5 e-Hybrid 245cv VZ" }
+{ "customer_full_name": "Mattina Napoli", "score": "1.000", "created_at": "2026-05-04T09:09:26Z", "monthly_fee": "646.21", "vehicle_full_name": "BYD SEAL U DM-i 1.5 324cv Design" }
+{ "customer_full_name": "Giulia Padova",  "score": "0.892", "created_at": "2026-04-05T09:14:00Z", "monthly_fee": "595.00", "vehicle_full_name": "BYD SEAL U DM-i 1.5 324cv Comfort" }
+{ "customer_full_name": "Sofia Bari",     "score": "0.882", "created_at": "2025-08-15T11:22:00Z", "monthly_fee": "720.00", "vehicle_full_name": "Volvo XC40 Recharge T5 PHEV Inscription" }
 ```
+
+Giulia (PHEV recente) ora batte Sofia (PHEV più vecchio con match leggermente migliore) grazie al peso recency. Il payload include `created_at` e `score_breakdown.recency`.
 
 Tutti i parametri della RPC sono opzionali — passa solo quelli che ti interessano; lo score è una media pesata sulle sole feature presenti. Pesi e formula nella spec §4.
 
