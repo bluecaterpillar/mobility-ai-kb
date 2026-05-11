@@ -76,7 +76,7 @@ st.dataframe(
     use_container_width=True,
     hide_index=True,
     column_config={
-        "created_at":           st.column_config.DatetimeColumn("Caricato il", format="DD/MM/YYYY HH:mm"),
+        "created_at":           st.column_config.DatetimeColumn("Data preventivo", format="DD/MM/YYYY HH:mm", width="medium"),
         "customer_type":        st.column_config.TextColumn("Tipo", width="small"),
         "customer_first_name":  "Nome",
         "customer_last_name":   "Cognome",
